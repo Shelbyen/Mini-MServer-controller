@@ -1,12 +1,13 @@
+from enum import Enum
 from math import ceil
 
 from aiogram import types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import executor
 from sqlalchemy import select
 
 from create_bot import dp, bot, server, conn, servers_db
-from keyboards.client_kb import main_menu, return_back
+from keyboards.client_kb import main_menu, return_back, create_server_keyboard, create_choice_keyboard
+from other import decode_callback_data, Commands
 
 
 async def on_startup(_):
@@ -33,57 +34,45 @@ async def running_servers(call: types.CallbackQuery):
     await bot.send_message(call.from_user.id, t, reply_markup=return_back)
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("*b"))
+@dp.callback_query_handler(lambda c: c.data and decode_callback_data(c.data)[1] == Commands.CHOICE_SERVER.value)
 async def choice_server(call: types.CallbackQuery):
-    page = int(call.data[2:])
+    page = decode_callback_data(call.data)[2]
     all_servers = conn.execute(select(servers_db.c.id, servers_db.c.name)).all()
-    if not 0 <= page <= ceil(len(all_servers) / 5):
+    if not 0 <= page <= ceil(len(all_servers) / 2):
         return False
 
     a = all_servers[page * 2: page * 2 + 2]
-    keyboard_with_servers = InlineKeyboardMarkup()
-    for i in a:
-        keyboard_with_servers.add(InlineKeyboardButton(i[1], callback_data=f'#{page}+{i[0]}'))
-
-    keyboard_with_servers.add(InlineKeyboardButton("<-", callback_data=f"*b{page - 1}"),
-                              InlineKeyboardButton("Назад", callback_data="menu"),
-                              InlineKeyboardButton("->", callback_data=f"*b{page + 1}"))
-
-    await call.message.edit_text('Доступные сервера:', reply_markup=keyboard_with_servers)
+    is_last_page = page == ceil(len(all_servers) / 2) - 1
+    await call.message.edit_text('Доступные сервера:',
+                                 reply_markup=create_choice_keyboard(a, page, is_last_page))
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("#"))
+@dp.callback_query_handler(lambda c: c.data and decode_callback_data(c.data)[1] == Commands.SERVER_INFO.value)
 async def server_info(call: types.CallbackQuery):
-    await call.message.delete()
-    info = conn.execute(servers_db.select().where(servers_db.c.id == int(call.data.split('+')[1]))).first()
+    server_id, _, l_p = decode_callback_data(call.data)
+    info = conn.execute(servers_db.select().where(servers_db.c.id == int(server_id))).first()
     t = 'Имя сервера: ' + info[1] + '\n'
     t += 'Статус: ' + ('Запущен!' if info[0] in server.server_processes else 'Не запущен!') + '\n'
     t += 'Описание: ' + info[2] + '\n'
-    server_keyboard = InlineKeyboardMarkup()
-    server_keyboard.add(InlineKeyboardButton("Изменить имя", callback_data=f'!1{info[0]}'),
-                        InlineKeyboardButton("Изменить описание", callback_data=f'!2{info[0]}'))
 
-    server_keyboard.add(InlineKeyboardButton("Редактировать моды", callback_data=f'!3{info[0]}'))
-
-    if info[0] not in server.server_processes:
-        server_keyboard.add(InlineKeyboardButton("Запустить!", callback_data=f'@{info[0]}'))
-    else:
-        server_keyboard.add(InlineKeyboardButton("Остановить!", callback_data=f'%{info[0]}'))
-
-    server_keyboard.add(InlineKeyboardButton("Назад", callback_data=f'*b{call.data[1:].split("+")[0]}'))
-    await bot.send_message(call.from_user.id, t, reply_markup=server_keyboard)
+    is_start = info[0] in server.server_processes
+    await call.message.edit_text(t, reply_markup=create_server_keyboard(info[0], l_p, is_start))
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("@"))
+@dp.callback_query_handler(lambda c: c.data and decode_callback_data(c.data)[1] == Commands.START.value)
 async def start_command(call: types.CallbackQuery):
+    server_id, _, l_p = decode_callback_data(call.data)
     await call.answer(server.start_server(
-        conn.execute(servers_db.select().where(servers_db.c.id == int(call.data[1:]))).first()))
+        conn.execute(servers_db.select().where(servers_db.c.id == server_id)).first()))
+    await server_info(call)
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("%"))
+@dp.callback_query_handler(lambda c: c.data and decode_callback_data(c.data)[1] == Commands.STOP.value)
 async def stop_command(call: types.CallbackQuery):
+    server_id, _, l_p = decode_callback_data(call.data)
     await call.answer(server.stop_server(
-        conn.execute(servers_db.select().where(servers_db.c.id == int(call.data[1:]))).first()))
+        conn.execute(servers_db.select().where(servers_db.c.id == server_id)).first()))
+    await server_info(call)
 
 
 if __name__ == '__main__':
