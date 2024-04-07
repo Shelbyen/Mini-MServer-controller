@@ -7,7 +7,7 @@ from aiogram.dispatcher import Dispatcher
 from sqlalchemy import create_engine, MetaData, Table, Column
 from sqlalchemy.types import Integer, String, Text
 
-from server import Server
+from server import ServerController
 
 engine = create_engine("sqlite:///data/servers.db")
 conn = engine.connect()
@@ -36,4 +36,4 @@ load_dotenv()
 
 bot = Bot(token=os.getenv('BOT_TOKEN'))
 dp = Dispatcher(bot)
-server = Server()
+server_controller = ServerController()

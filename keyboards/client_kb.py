@@ -24,7 +24,7 @@ def create_choice_keyboard(a, page, is_last_page):
     return keyboard_with_servers
 
 
-def create_server_keyboard(server_id, l_p, server_is_start):
+def create_server_keyboard(server_id, l_p, server_status):
     server_keyboard = InlineKeyboardMarkup()
     server_keyboard.add(
         InlineKeyboardButton("Изменить имя", callback_data=create_callback_data(Commands.RENAME.value, server_id, l_p)),
@@ -35,14 +35,12 @@ def create_server_keyboard(server_id, l_p, server_is_start):
                                              callback_data=create_callback_data(Commands.EDIT_MODS.value, server_id,
                                                                                 l_p)))
 
-    if not server_is_start:
+    if server_status == -1:
         server_keyboard.add(InlineKeyboardButton("Запустить!",
-                                                 callback_data=create_callback_data(Commands.START.value, server_id,
-                                                                                    l_p)))
-    else:
+                            callback_data=create_callback_data(Commands.START.value, server_id, l_p)))
+    elif server_status == 1:
         server_keyboard.add(InlineKeyboardButton("Остановить!",
-                                                 callback_data=create_callback_data(Commands.STOP.value, server_id,
-                                                                                    l_p)))
+                            callback_data=create_callback_data(Commands.STOP.value, server_id, l_p)))
 
     server_keyboard.add(
         InlineKeyboardButton("Назад", callback_data=create_callback_data(Commands.CHOICE_SERVER.value, c_info=l_p)))
